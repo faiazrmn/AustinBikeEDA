@@ -1,0 +1,330 @@
+---
+title: "Austin Bike Share Trips EDA"
+subtitle: "Using lubridate package in R for Date-Time Manipulation"
+author: "FRK"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output: 
+  html_document:
+    toc: TRUE
+    number_sections: TRUE
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, 
+                      fig.width = 10)
+```
+
+
+# Read Data
+
+```{r}
+rm(list = ls())
+
+library(tidyverse)
+library(lubridate)
+library(skimr)
+library(tseries)
+library(forecast)
+
+##########################################################
+################   Bike Share Analysis   #################
+##########################################################
+
+bike <- read_csv("austin_bikeshare_trips.csv")
+      
+```
+
+# Summary of the Data
+
+```{r}
+
+glimpse(bike)
+summary(bike)
+skim(bike)
+
+```
+
+# EDA
+
+## Most Common Pickup Points, Top 20
+
+```{r}
+
+#########################  1  ###########################
+
+bike %>% 
+  count(start_station_name, sort = T) %>% 
+  head(20)
+
+fillColor = "#FFA533"
+fillColor2 = "#EECA16"
+fillColor3 = "#16D2EE"
+
+bike %>% 
+  count(start_station_name, sort = T) %>% 
+  head(20) %>% 
+  ggplot(aes(fct_reorder(start_station_name, n) , n)) + 
+  geom_bar(stat="identity",colour="white", fill = fillColor) +
+  geom_text(aes(label = format(n, big.mark = ",")), hjust =  -0.1, size = 2.5, colour = 'black', fontface = 'bold') +
+  coord_flip() +
+  labs(title = "Most Common Pickup Points", y = "Count", x = NULL) +
+  theme_light() +
+  scale_y_continuous(labels = scales::comma)
+```
+
+## Most Common End Points, Top 20
+
+```{r}
+bike %>% 
+  count(end_station_name, sort = T) %>% 
+  head(20) 
+
+bike %>% 
+  count(end_station_name, sort = T) %>% 
+  head(20) %>% 
+  ggplot(aes(fct_reorder(end_station_name, n) , n)) + 
+  geom_bar(stat="identity",colour="white", fill = fillColor) +
+  geom_text(aes(label = format(n, big.mark = ",")), hjust =  -0.1, size = 2.5, colour = 'black', fontface = 'bold') +
+  coord_flip() +
+  labs(title = "Most Common End Points", y = "Count", x = NULL)+
+  theme_light() +
+  scale_y_continuous(labels = scales::comma)
+
+```
+
+## Most Common Route, Top 10
+
+We use both starting and ending station and count number of rides in the route. dplyr package's group_by can be used to do this very easily.
+
+```{r}
+bike %>% 
+  group_by(start_station_name, end_station_name) %>% 
+  count(start_station_name, sort = T) %>% 
+  head(10)
+
+```
+
+## Date Time Manipulation using *lubridate* package
+
+*lubridate* package eneables us to manipulate Date-Time data very easily. We can extract month, day, weekday, date, Hour, Minutes, Seconds, time intervals etc easily.
+
+### Busiest Month
+
+```{r}
+m <- bike %>% count( m = month(start_time, label = TRUE), sort = TRUE) 
+m
+
+m %>% 
+  ggplot(aes(fct_reorder(m, n), n)) + 
+  geom_bar(stat="identity",colour="white", fill = fillColor) + 
+  geom_text(aes(label = format(n, big.mark = ",")), hjust =  -0.1, size = 3, colour = 'black', fontface = 'bold') +
+  coord_flip() +
+  labs(title = "Busiest Month", y = "Count", x = NULL) +
+  theme_light() +
+  scale_y_continuous(labels = scales::comma)
+```
+
+
+
+### Busiest Date of the month
+
+
+```{r}
+d <- bike %>% count(day = mday(start_time), sort = TRUE)
+d
+
+d %>% 
+  ggplot(aes(reorder(day, n), n)) + 
+  geom_bar(stat="identity",colour="white", fill = fillColor) + 
+  geom_text(aes(label = format(n, big.mark = ",")), hjust = -0.05, size = 2.5, colour = 'black', fontface = 'bold') +
+  coord_flip() + 
+  labs(title = "Busiest Date of the Month", y = "Count", x = NULL) +
+  theme_light() +
+  scale_y_continuous(labels = scales::comma)
+```
+
+11th to 19th dates seem to be most busy during a months.
+
+### Busiest dates by Month
+
+```{r, fig.height=10}
+d <- bike %>% 
+  count(day = mday(start_time), sort = TRUE)
+d
+
+bike %>% 
+  group_by(day = mday(start_time),
+           month = month(start_time, label = T, abbr = F)) %>% 
+  summarise(n = n()) %>% 
+  
+  ggplot(aes(day, n)) + 
+  geom_bar(stat="identity",colour="white", fill = fillColor) + 
+  geom_text(aes(label = format(n, big.mark = ",")), hjust = -0.08, size = 2, colour = 'black', fontface = 'bold') +
+  coord_flip() + 
+  labs(title = "Busiest Date of the Month", y = "Count", x = NULL) +
+  theme_light() +
+  scale_y_continuous(labels = scales::comma) +
+  facet_wrap(~month)
+
+```
+
+### Busiest WeekDay
+
+```{r}
+w <- bike %>% count(w = wday(start_time, label = TRUE), sort = TRUE)
+w
+
+w %>% 
+  ggplot(aes(reorder(w,n), n)) + 
+  geom_bar(stat="identity",colour="white", fill = fillColor) + 
+  geom_text(aes(label = format(n, big.mark = ",")), hjust = -0.05, size = 2.5, colour = 'black', fontface = 'bold') +
+  coord_flip() + 
+  labs(title = "Busiest Weekdays", y = "Count", x = NULL) +
+  theme_light() + 
+  scale_y_continuous(labels = scales::comma)
+
+```
+
+### Busiest Hour
+
+```{r}
+
+### Busiest Hour
+h <- bike %>% mutate(h = format(start_time, "%H"))
+h <- h %>% count(h, sort = TRUE)
+h
+
+h %>% 
+  ggplot(aes(h, n)) + 
+  geom_bar(stat="identity", colour="white", fill = fillColor2) + 
+  geom_text(aes(label = format(n, big.mark = ",")), vjust = -0.2, size = 2.5 , colour = 'black', fontface = 'bold') +
+  labs(title = "Busiest Hours of the Day", y = "Count", x = "Hour") +
+  theme_light()
+
+h %>% 
+  ggplot(aes(reorder(h, n), n)) + 
+  geom_bar(stat="identity", colour="white", fill = fillColor2) + 
+  geom_text(aes(label = format(n, big.mark = ",")), hjust = -0.05, size = 2.5 , colour = 'black', fontface = 'bold') +
+  labs(title = "Busiest Hours of the Day", y = "Count", x = NULL) +
+  theme_light() +
+  coord_flip() + 
+  scale_y_continuous(labels = scales::comma)
+
+
+```
+
+
+# Time Series Prediction
+
+## Convert to Monthly Data
+
+We extract the date and time separately, then use the date variable to further transform our data.
+
+```{r}
+# Convert to Monthly Data
+# Again using lubridate package
+
+bike <- tidyr::separate(data = bike, col = start_time, into = c("start_date", "time"), sep = " ", remove = FALSE)
+```
+
+
+## Count monthly number of rides
+
+using *floor_date* from lubridate, we convert all the dates of a month to the first day of the month, this way it makes the counting ride easier.
+
+```{r}
+bike$c <- 1
+bikemonth <- bike %>% 
+  select(start_date, trip_id, c) %>% 
+  group_by(month = lubridate::floor_date(ymd(start_date), "month")) %>%
+  summarize(Rides = sum(c))
+```
+
+## Input Missing Months by using previous year values
+
+
+```{r}
+unique(bikemonth$month)
+```
+
+
+Looks like April and December are missing from our data. We will use previous year's values for this month. This is important for our time series data to have uniform dates and values to predict seasonality.
+
+```{r}
+bikemonth %>% 
+  filter(month %in% ymd(c("2015-12-01", "2015-04-01")))
+
+missingmon <- data.frame(month = ymd(c("2016-12-01", "2016-04-01")), Rides = c(10057, 16554))
+missingmon
+
+bikemonth <- rbind(bikemonth, missingmon) %>% arrange(month)
+unique(bikemonth$month)
+```
+
+
+## Visualize the finalized time series
+
+```{r}
+bikemonth %>% 
+  ggplot(aes(month, Rides)) + 
+  geom_line() + 
+  labs( x= "Month", title="Monthly Bike Ride Counts")
+```
+
+
+## Seasonal Time Series Model Fitting, SARIMA Model
+
+```{r}
+ts <- (bikemonth$Rides)
+
+acf(ts)
+pacf(ts)
+
+plot(diff(ts, 1), type='l')
+adf.test(ts)
+plot(diff(ts, 2), type='l')
+plot(diff(ts, 3), type='l')
+
+acf(diff(ts, 1))
+pacf(diff(ts, 1))
+
+```
+
+
+Observing the ACF and PACF plots, we decide to fit a SARIAMA(0,1,1)(1,1,1)(12) model to our data.
+
+```{r}
+
+n = 36
+
+mod2 <- arima(ts, order = c(0,1,1), seasonal = list(order = c(1,1,1), period = 12))
+
+### Model and Predictions
+mod2
+
+f <- as.data.frame(predict(mod2, n.ahead = n))
+
+### Time Series plot of Forecasted Values
+
+### Paste original and forecasted data together
+bikemonth$type <- "Data"
+d <- data.frame(max(bikemonth$month) + months(1:n), f$pred, rep("Forecast", n))
+names(d) <- names(bikemonth)
+bikeforcast <- rbind(bikemonth,d)
+tail(bikeforcast)
+
+bikeCI <- bikeforcast %>% filter(type == "Forecast")
+
+
+p <- bikeforcast %>% 
+  ggplot(aes(month, Rides, color=type)) + 
+  geom_line() +
+  geom_point() +
+  scale_x_date(date_labels = "%b %y", breaks = "3 month") +
+  theme(axis.text.x = element_text(size=8, angle = 90))
+
+plotly::ggplotly(p)
+
+```
+
